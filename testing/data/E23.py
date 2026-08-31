@@ -8,7 +8,6 @@ a = [{'a':''}]
 a = (4,)
 b = (5, )
 c = {'text': text[5:]}
-print(f"{x:0.{digits:d}f}")
 
 result = {
     'key1': 'value',

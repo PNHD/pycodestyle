@@ -29,3 +29,10 @@ f'{
 f'{ an_error_now }'
 #: Okay
 f'{x:02x}'
+#: Okay
+# nested format specifiers
+f'{x:0.{digits:d}f}'
+f'{x:{width:d}.2f}'
+f'{x: {width:d}.2f}'
+#: E231
+f"{x:{({'a':'b'})}}"
