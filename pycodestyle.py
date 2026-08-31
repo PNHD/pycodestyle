@@ -2445,7 +2445,10 @@ class StyleGuide:
         if not self.options.exclude:
             return False
         basename = os.path.basename(filename)
-        if filename_match(basename, self.options.exclude):
+        if (
+            basename not in {'.', '..'} and
+            filename_match(basename, self.options.exclude)
+        ):
             return True
         if parent:
             filename = os.path.join(parent, filename)
