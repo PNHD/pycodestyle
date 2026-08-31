@@ -17,3 +17,13 @@ t'{
 t'{ an_error_now }'
 #: Okay
 t'{x:02x}'
+#: Okay
+# nested format specifiers
+t'{x:0.{digits:d}f}'
+t'{x:{width:d}.2f}'
+t'{x:{y:{z:02}}}'
+t'{x:{y!r:10}}'
+t'{x:{y[1:2]}}'
+t'{x:{({"a": "b"})}}'
+#: E231
+t"{x:{({'a':'b'})}}"

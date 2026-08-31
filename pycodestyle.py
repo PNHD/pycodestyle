@@ -874,9 +874,24 @@ def missing_whitespace(logical_line, tokens):
     prev_text = prev_end = None
     operator_types = (tokenize.OP, tokenize.NAME)
     brace_stack = []
+    format_spec_depths = []
+    nested_field_depths = []
     for token_type, text, start, end, line in tokens:
+        depth = len(brace_stack)
+        lambda_colon = (
+            token_type == tokenize.OP and
+            text == ':' and
+            brace_stack[-1:] == ['l']
+        )
+        nested_field = (
+            token_type == tokenize.OP and
+            text == '{' and
+            format_spec_depths[-1:] == [depth]
+        )
         if token_type == tokenize.OP and text in {'[', '(', '{'}:
             brace_stack.append(text)
+            if nested_field:
+                nested_field_depths.append(depth + 1)
         elif token_type == FSTRING_START:  # pragma: >=3.12 cover
             brace_stack.append('f')
         elif token_type == TSTRING_START:  # pragma: >=3.14 cover
@@ -885,6 +900,10 @@ def missing_whitespace(logical_line, tokens):
             brace_stack.append('l')
         elif brace_stack:
             if token_type == tokenize.OP and text in {']', ')', '}'}:
+                if format_spec_depths[-1:] == [depth]:
+                    format_spec_depths.pop()
+                if nested_field_depths[-1:] == [depth]:
+                    nested_field_depths.pop()
                 brace_stack.pop()
             elif token_type == FSTRING_END:  # pragma: >=3.12 cover
                 brace_stack.pop()
@@ -897,6 +916,18 @@ def missing_whitespace(logical_line, tokens):
             ):
                 brace_stack.pop()
 
+        depth = len(brace_stack)
+        format_specifier = (
+            token_type == tokenize.OP and
+            text == ':' and
+            not lambda_colon and (
+                brace_stack[-2:] in (['f', '{'], ['t', '{']) or
+                nested_field_depths[-1:] == [depth]
+            )
+        )
+        if format_specifier:
+            format_spec_depths.append(depth)
+
         if token_type in SKIP_COMMENTS:
             continue
 
@@ -906,11 +937,8 @@ def missing_whitespace(logical_line, tokens):
                 # slice
                 if text == ':' and brace_stack[-1:] == ['[']:
                     pass
-                # 3.12+ fstring format specifier
-                elif text == ':' and brace_stack[-2:] == ['f', '{']:  # pragma: >=3.12 cover  # noqa: E501
-                    pass
-                # 3.14+ tstring format specifier
-                elif text == ':' and brace_stack[-2:] == ['t', '{']:  # pragma: >=3.14 cover  # noqa: E501
+                # f/tstring format specifier
+                elif format_specifier:
                     pass
                 # tuple (and list for some reason?)
                 elif text == ',' and next_char in ')]':

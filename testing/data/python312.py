@@ -29,3 +29,16 @@ f'{
 f'{ an_error_now }'
 #: Okay
 f'{x:02x}'
+#: Okay
+# nested format specifiers
+f'{x:0.{digits:d}f}'
+f'{x:{width:d}.2f}'
+f'{x: {width:d}.2f}'
+# deeper nesting case from the earlier attempted fix
+f'{x:{y:{z:02}}}'
+# nested expressions must keep their own colon semantics
+f'{x:{y!r:10}}'
+f'{x:{y[1:2]}}'
+f'{x:{({"a": "b"})}}'
+#: E231
+f"{x:{({'a':'b'})}}"
