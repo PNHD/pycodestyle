@@ -49,84 +49,92 @@ jobs:
               source = source.replace(old, new, 1)
 
           replace_once(
-              """    brace_stack = []
-          for token_type, text, start, end, line in tokens:
-              if token_type == tokenize.OP and text in {'[', '(', '{'}:
-                  brace_stack.append(text)
-          """,
-              """    brace_stack = []
-          format_spec_depths = []
-          nested_field_depths = []
-          for token_type, text, start, end, line in tokens:
-              depth = len(brace_stack)
-              lambda_colon = (
-                  token_type == tokenize.OP and
-                  text == ':' and
-                  brace_stack[-1:] == ['l']
-              )
-              nested_field = (
-                  token_type == tokenize.OP and
-                  text == '{' and
-                  format_spec_depths[-1:] == [depth]
-              )
-              if token_type == tokenize.OP and text in {'[', '(', '{'}:
-                  brace_stack.append(text)
-                  if nested_field:
-                      nested_field_depths.append(depth + 1)
-          """,
+              (
+                  "    brace_stack = []\n"
+                  "    for token_type, text, start, end, line in tokens:\n"
+                  "        if token_type == tokenize.OP and text in {'[', '(', '{'}:\n"
+                  "            brace_stack.append(text)\n"
+              ),
+              (
+                  "    brace_stack = []\n"
+                  "    format_spec_depths = []\n"
+                  "    nested_field_depths = []\n"
+                  "    for token_type, text, start, end, line in tokens:\n"
+                  "        depth = len(brace_stack)\n"
+                  "        lambda_colon = (\n"
+                  "            token_type == tokenize.OP and\n"
+                  "            text == ':' and\n"
+                  "            brace_stack[-1:] == ['l']\n"
+                  "        )\n"
+                  "        nested_field = (\n"
+                  "            token_type == tokenize.OP and\n"
+                  "            text == '{' and\n"
+                  "            format_spec_depths[-1:] == [depth]\n"
+                  "        )\n"
+                  "        if token_type == tokenize.OP and text in {'[', '(', '{'}:\n"
+                  "            brace_stack.append(text)\n"
+                  "            if nested_field:\n"
+                  "                nested_field_depths.append(depth + 1)\n"
+              ),
           )
           replace_once(
-              """        elif brace_stack:
-              if token_type == tokenize.OP and text in {']', ')', '}'}:
-                  brace_stack.pop()
-              elif token_type == FSTRING_END:  # pragma: >=3.12 cover
-          """,
-              """        elif brace_stack:
-              if token_type == tokenize.OP and text in {']', ')', '}'}:
-                  if format_spec_depths[-1:] == [depth]:
-                      format_spec_depths.pop()
-                  if nested_field_depths[-1:] == [depth]:
-                      nested_field_depths.pop()
-                  brace_stack.pop()
-              elif token_type == FSTRING_END:  # pragma: >=3.12 cover
-          """,
+              (
+                  "        elif brace_stack:\n"
+                  "            if token_type == tokenize.OP and text in {']', ')', '}'}:\n"
+                  "                brace_stack.pop()\n"
+                  "            elif token_type == FSTRING_END:  # pragma: >=3.12 cover\n"
+              ),
+              (
+                  "        elif brace_stack:\n"
+                  "            if token_type == tokenize.OP and text in {']', ')', '}'}:\n"
+                  "                if format_spec_depths[-1:] == [depth]:\n"
+                  "                    format_spec_depths.pop()\n"
+                  "                if nested_field_depths[-1:] == [depth]:\n"
+                  "                    nested_field_depths.pop()\n"
+                  "                brace_stack.pop()\n"
+                  "            elif token_type == FSTRING_END:  # pragma: >=3.12 cover\n"
+              ),
           )
           replace_once(
-              """            ):
-                  brace_stack.pop()
-
-              if token_type in SKIP_COMMENTS:
-          """,
-              """            ):
-                  brace_stack.pop()
-
-              depth = len(brace_stack)
-              format_specifier = (
-                  token_type == tokenize.OP and
-                  text == ':' and
-                  not lambda_colon and (
-                      brace_stack[-2:] in (['f', '{'], ['t', '{']) or
-                      nested_field_depths[-1:] == [depth]
-                  )
-              )
-              if format_specifier:
-                  format_spec_depths.append(depth)
-
-              if token_type in SKIP_COMMENTS:
-          """,
+              (
+                  "            ):\n"
+                  "                brace_stack.pop()\n"
+                  "\n"
+                  "        if token_type in SKIP_COMMENTS:\n"
+              ),
+              (
+                  "            ):\n"
+                  "                brace_stack.pop()\n"
+                  "\n"
+                  "        depth = len(brace_stack)\n"
+                  "        format_specifier = (\n"
+                  "            token_type == tokenize.OP and\n"
+                  "            text == ':' and\n"
+                  "            not lambda_colon and (\n"
+                  "                brace_stack[-2:] in (['f', '{'], ['t', '{']) or\n"
+                  "                nested_field_depths[-1:] == [depth]\n"
+                  "            )\n"
+                  "        )\n"
+                  "        if format_specifier:\n"
+                  "            format_spec_depths.append(depth)\n"
+                  "\n"
+                  "        if token_type in SKIP_COMMENTS:\n"
+              ),
           )
           replace_once(
-              """                # 3.12+ fstring format specifier
-                  elif text == ':' and brace_stack[-2:] == ['f', '{']:  # pragma: >=3.12 cover  # noqa: E501
-                      pass
-                  # 3.14+ tstring format specifier
-                  elif text == ':' and brace_stack[-2:] == ['t', '{']:  # pragma: >=3.14 cover  # noqa: E501
-                      pass
-          """,
-              """                # f/tstring format specifier
-                  elif format_specifier:
-                      pass
-          """,
+              (
+                  "                # 3.12+ fstring format specifier\n"
+                  "                elif text == ':' and brace_stack[-2:] == ['f', '{']:  # pragma: >=3.12 cover  # noqa: E501\n"
+                  "                    pass\n"
+                  "                # 3.14+ tstring format specifier\n"
+                  "                elif text == ':' and brace_stack[-2:] == ['t', '{']:  # pragma: >=3.14 cover  # noqa: E501\n"
+                  "                    pass\n"
+              ),
+              (
+                  "                # f/tstring format specifier\n"
+                  "                elif format_specifier:\n"
+                  "                    pass\n"
+              ),
           )
 
           path.write_text(source)
@@ -147,14 +155,15 @@ jobs:
           e23.write_text(''.join(lines))
 
           python312 = Path('testing/data/python312.py')
-          addition = """#: Okay
-          # nested format specifiers
-          f'{x:0.{digits:d}f}'
-          f'{x:{width:d}.2f}'
-          f'{x: {width:d}.2f}'
-          #: E231
-          f"{x:{({'a':'b'})}}"
-          """
+          addition = (
+              "#: Okay\n"
+              "# nested format specifiers\n"
+              "f'{x:0.{digits:d}f}'\n"
+              "f'{x:{width:d}.2f}'\n"
+              "f'{x: {width:d}.2f}'\n"
+              "#: E231\n"
+              "f\"{x:{({'a':'b'})}}\"\n"
+          )
           text = python312.read_text()
           if 'nested format specifiers' in text:
               raise SystemExit('nested format regression cases already exist')
