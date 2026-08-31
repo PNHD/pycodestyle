@@ -251,6 +251,14 @@ class APITestCase(unittest.TestCase):
         self.assertFalse(pep8style.excluded('./CVSoup'))
         self.assertFalse(pep8style.excluded('./CVS/subdir'))
 
+        pep8style = pycodestyle.StyleGuide(exclude=['.*'])
+        self.assertFalse(pep8style.excluded('.'))
+        self.assertFalse(pep8style.excluded('..'))
+        self.assertTrue(pep8style.excluded('.hidden'))
+
+        pep8style = pycodestyle.StyleGuide(exclude=[os.path.abspath('.')])
+        self.assertTrue(pep8style.excluded('.'))
+
     def test_styleguide_checks(self):
         pep8style = pycodestyle.StyleGuide(paths=[E11])
 
