@@ -1,0 +1,178 @@
+name: verify issue 1241
+
+on:
+  push:
+    branches: [test-me-1241]
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/1241-nested-fstring-format
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install focused test dependencies
+        run: python -m pip install -e . pytest tox
+      - name: Confirm regression is red before the fix
+        shell: bash
+        run: |
+          set +e
+          python -m pytest tests/test_data.py -q > /tmp/red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/red.log
+          if [ "$status" -eq 0 ]; then
+            echo 'Expected the regression test to fail before the fix.' >&2
+            exit 1
+          fi
+          grep -q '+E231' /tmp/red.log
+      - name: Apply the minimal parser fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('pycodestyle.py')
+          source = path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global source
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one match, found {count}: {old!r}')
+              source = source.replace(old, new, 1)
+
+          replace_once(
+              """    brace_stack = []
+          for token_type, text, start, end, line in tokens:
+              if token_type == tokenize.OP and text in {'[', '(', '{'}:
+                  brace_stack.append(text)
+          """,
+              """    brace_stack = []
+          format_spec_depths = []
+          nested_field_depths = []
+          for token_type, text, start, end, line in tokens:
+              depth = len(brace_stack)
+              lambda_colon = (
+                  token_type == tokenize.OP and
+                  text == ':' and
+                  brace_stack[-1:] == ['l']
+              )
+              nested_field = (
+                  token_type == tokenize.OP and
+                  text == '{' and
+                  format_spec_depths[-1:] == [depth]
+              )
+              if token_type == tokenize.OP and text in {'[', '(', '{'}:
+                  brace_stack.append(text)
+                  if nested_field:
+                      nested_field_depths.append(depth + 1)
+          """,
+          )
+          replace_once(
+              """        elif brace_stack:
+              if token_type == tokenize.OP and text in {']', ')', '}'}:
+                  brace_stack.pop()
+              elif token_type == FSTRING_END:  # pragma: >=3.12 cover
+          """,
+              """        elif brace_stack:
+              if token_type == tokenize.OP and text in {']', ')', '}'}:
+                  if format_spec_depths[-1:] == [depth]:
+                      format_spec_depths.pop()
+                  if nested_field_depths[-1:] == [depth]:
+                      nested_field_depths.pop()
+                  brace_stack.pop()
+              elif token_type == FSTRING_END:  # pragma: >=3.12 cover
+          """,
+          )
+          replace_once(
+              """            ):
+                  brace_stack.pop()
+
+              if token_type in SKIP_COMMENTS:
+          """,
+              """            ):
+                  brace_stack.pop()
+
+              depth = len(brace_stack)
+              format_specifier = (
+                  token_type == tokenize.OP and
+                  text == ':' and
+                  not lambda_colon and (
+                      brace_stack[-2:] in (['f', '{'], ['t', '{']) or
+                      nested_field_depths[-1:] == [depth]
+                  )
+              )
+              if format_specifier:
+                  format_spec_depths.append(depth)
+
+              if token_type in SKIP_COMMENTS:
+          """,
+          )
+          replace_once(
+              """                # 3.12+ fstring format specifier
+                  elif text == ':' and brace_stack[-2:] == ['f', '{']:  # pragma: >=3.12 cover  # noqa: E501
+                      pass
+                  # 3.14+ tstring format specifier
+                  elif text == ':' and brace_stack[-2:] == ['t', '{']:  # pragma: >=3.14 cover  # noqa: E501
+                      pass
+          """,
+              """                # f/tstring format specifier
+                  elif format_specifier:
+                      pass
+          """,
+          )
+
+          path.write_text(source)
+          PY
+      - name: Confirm the regression is green
+        run: python -m pytest tests/test_data.py -q
+      - name: Refine regression coverage
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          e23 = Path('testing/data/E23.py')
+          lines = e23.read_text().splitlines(keepends=True)
+          issue_line = 'print(f"{x:0.{digits:d}f}")\n'
+          if lines.count(issue_line) != 1:
+              raise SystemExit('issue #1241 regression line was not found once')
+          lines.remove(issue_line)
+          e23.write_text(''.join(lines))
+
+          python312 = Path('testing/data/python312.py')
+          addition = """#: Okay
+          # nested format specifiers
+          f'{x:0.{digits:d}f}'
+          f'{x:{width:d}.2f}'
+          f'{x: {width:d}.2f}'
+          #: E231
+          f"{x:{({'a':'b'})}}"
+          """
+          text = python312.read_text()
+          if 'nested format specifiers' in text:
+              raise SystemExit('nested format regression cases already exist')
+          python312.write_text(text + addition)
+          PY
+      - name: Run functional data tests after refactor
+        run: python -m pytest tests/test_data.py -q
+      - name: Run project test environment
+        run: tox -e py
+      - name: Run flake8 environment
+        run: tox -e flake8
+      - name: Check diff whitespace
+        run: git diff --check
+      - name: Commit verified fix to target branch
+        shell: bash
+        run: |
+          git config user.name 'Dang Pham'
+          git config user.email '26757735+PNHD@users.noreply.github.com'
+          git add pycodestyle.py testing/data/E23.py testing/data/python312.py
+          git commit -m 'fix: handle nested f-string format specifiers'
+          git push origin HEAD:fix/1241-nested-fstring-format
